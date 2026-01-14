@@ -19,7 +19,7 @@ const JOBS = new Map();
 
 // 👉 PUT *YOUR* phone number here for testing
 const TECHS = [
-  { id: "tech_a", name: "You", phone: "+1YOURPHONENUMBER" }
+  { id: "tech_a", name: "You", phone: "+19059956233" }
 ];
 
 function buildTechScript(job) {
