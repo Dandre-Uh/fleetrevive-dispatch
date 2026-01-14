@@ -44,6 +44,7 @@ Press 1 to accept. Press 2 to decline.`;
 
 
 // Driver/AI intake endpoint
+console.log("INTAKE BODY:", req.body);
 app.post("/api/jobs/intake", async (req, res) => {
   const jobId = "JOB-" + Date.now();
 
