@@ -44,9 +44,12 @@ Press 1 to accept. Press 2 to decline.`;
 
 
 // Driver/AI intake endpoint
-console.log("INTAKE BODY:", req.body);
 app.post("/api/jobs/intake", async (req, res) => {
+  console.log("INTAKE BODY:", req.body); // ✅ HERE
   const jobId = "JOB-" + Date.now();
+  ...
+});
+
 
   const job = {
     job_id: jobId,
@@ -73,11 +76,12 @@ app.post("/api/jobs/intake", async (req, res) => {
 // Tech call IVR
 app.post("/voice/offer", (req, res) => {
   const job = JOBS.get(req.query.jobId);
+  <Say>${buildTechScript(job)}</Say>
 
   res.type("text/xml");
   res.send(`
 <Response>
-  <Gather numDigits="1" action="/voice/offer/choice?jobId=${req.query.jobId}">
+  <Gather numDigits="1" action="//offer/choice?jobId=${req.query.jobId}">
     <Say>${buildTechScript(job)}</Say>
   </Gather>
 </Response>
