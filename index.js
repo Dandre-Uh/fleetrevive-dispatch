@@ -26,14 +26,21 @@ const TECHS = [
 ];
 
 function buildTechScript(job) {
-  const issue = job?.issue_type || "not provided";
-  const loc = job?.location_text || "not provided";
-  const vehicle = job?.vehicle || "not provided";
-  const notes = job?.notes || "none";
-  const cb = job?.caller_phone || "not provided";
+  const issue = job.issue_type || "not provided";
+  const loc = job.location_text || "not provided";
+  const vehicle = job.vehicle || "not provided";
+  const notes = job.notes || "none";
+  const cb = job.caller_phone || "not provided";
 
-  return `New roadside service call. Issue: ${issue}. Location: ${loc}. Vehicle: ${vehicle}. Notes: ${notes}. Driver callback: ${cb}. Press 1 to accept. Press 2 to decline. Press 3 to repeat.`;
+  return `New roadside service call. 
+Issue: ${issue}. 
+Location: ${loc}. 
+Vehicle: ${vehicle}. 
+Notes: ${notes}. 
+Driver callback: ${cb}. 
+Press 1 to accept. Press 2 to decline.`;
 }
+
 
 
 // Driver/AI intake endpoint
