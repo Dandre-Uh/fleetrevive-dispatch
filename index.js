@@ -8,6 +8,8 @@ app.use(cors());
 app.options("*", cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
@@ -90,6 +92,69 @@ app.post("/voice/offer/choice", (req, res) => {
   }
 
   return res.send(`<Response><Say>Job declined.</Say></Response>`);
+});
+
+app.post("/vapi/webhook", async (req, res) => {
+  // Optional security: verify secret from Vapi
+  const incoming = req.header("X-Vapi-Secret");
+  if (process.env.VAPI_SECRET && incoming !== process.env.VAPI_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  const msg = req.body?.message;
+
+  // Only tool-calls require a JSON response
+  if (!msg || msg.type !== "tool-calls") return res.sendStatus(200);
+
+  const toolCalls = msg.toolCallList || [];
+  const results = [];
+
+  for (const tc of toolCalls) {
+    if (tc.name !== "create_service_job") {
+      results.push({
+        toolCallId: tc.id,
+        result: { ok: false, error: "unknown_tool" }
+      });
+      continue;
+    }
+
+    try {
+      const body = tc.parameters || {};
+
+      const jobId = "JOB-" + Date.now();
+      const job = {
+        job_id: jobId,
+        caller_phone: body.caller_phone,
+        issue_type: body.issue_type,
+        vehicle: body.vehicle,
+        location_text: body.location_text,
+        notes: body.notes
+      };
+
+      // Store for the tech-call IVR to read
+      JOBS.set(jobId, job);
+
+      // Call the tech
+      await client.calls.create({
+        to: TECHS[0].phone,
+        from: process.env.TWILIO_PHONE,
+        url: `${process.env.BASE_URL}/voice/offer?jobId=${encodeURIComponent(jobId)}`
+      });
+
+      results.push({
+        toolCallId: tc.id,
+        result: { ok: true, job_id: jobId, status: "calling_tech" }
+      });
+    } catch (e) {
+      console.error("VAPI DISPATCH ERROR:", e?.message || e);
+      results.push({
+        toolCallId: tc.id,
+        result: { ok: false, error: "dispatch_failed" }
+      });
+    }
+  }
+
+  return res.json({ results });
 });
 
 app.listen(process.env.PORT || 3000, () => console.log("Server running"));
