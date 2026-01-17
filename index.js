@@ -140,51 +140,54 @@ app.post("/vapi/webhook", async (req, res) => {
   const results = [];
 
   for (const tc of toolCalls) {
-    if (tc.name !== "create_service_job") {
-      results.push({
-        toolCallId: tc.id,
-        result: { ok: false, error: "unknown_tool" }
-      });
-      continue;
-    }
+  console.log("TOOL CALL RECEIVED:", tc.name, tc.parameters);
 
-    try {
-      const body = tc.parameters || {};
-
-      const jobId = "JOB-" + Date.now();
-      const job = {
-        job_id: jobId,
-        caller_phone: body.caller_phone,
-        issue_type: body.issue_type,
-        vehicle: body.vehicle,
-        location_text: body.location_text,
-        notes: body.notes
-      };
-
-      // Store for the tech-call IVR to read
-      JOBS.set(jobId, job);
-
-      // Call the tech
-      await client.calls.create({
-        to: TECHS[0].phone,
-        from: process.env.TWILIO_PHONE,
-        url: `${process.env.BASE_URL}/voice/offer?jobId=${encodeURIComponent(jobId)}`
-      });
-
-      results.push({
-        toolCallId: tc.id,
-        result: { ok: true, job_id: jobId, status: "calling_tech" }
-      });
-    } catch (e) {
-      console.error("VAPI DISPATCH ERROR:", e?.message || e);
-      results.push({
-        toolCallId: tc.id,
-        result: { ok: false, error: "dispatch_failed" }
-      });
-    }
+  if (tc.name !== "create_service_job") {
+    results.push({
+      toolCallId: tc.id,
+      result: JSON.stringify({ ok: false, error: "unknown_tool" })
+    });
+    continue;
   }
 
+  try {
+    const body = tc.parameters || {};
+    const jobId = "JOB-" + Date.now();
+
+    const job = {
+      job_id: jobId,
+      caller_phone: body.caller_phone,
+      issue_type: body.issue_type,
+      vehicle: body.vehicle,
+      location_text: body.location_text,
+      notes: body.notes
+    };
+
+    JOBS.set(jobId, job);
+
+    // 👇 TWILIO CODE GOES HERE
+    const call = await client.calls.create({
+      to: TECHS[0].phone,
+      from: process.env.TWILIO_PHONE,
+      url: `${process.env.BASE_URL}/voice/offer?jobId=${encodeURIComponent(jobId)}`
+    });
+
+    console.log("TWILIO CALL CREATED:", call.sid);
+
+    results.push({
+      toolCallId: tc.id,
+      result: JSON.stringify({ ok: true, job_id: jobId, status: "calling_tech" })
+    });
+  } catch (e) {
+    console.error("VAPI DISPATCH ERROR:", e?.message || e);
+    results.push({
+      toolCallId: tc.id,
+      result: JSON.stringify({ ok: false, error: "dispatch_failed" })
+    });
+      } // end try/catch
+} // end for loop
+
   return res.json({ results });
-});
+}); // end /vapi/webhook route
 
 app.listen(process.env.PORT || 3000, () => console.log("Server running"));
