@@ -31,10 +31,12 @@ function buildTechScript(job) {
   const notes = job?.notes || "none";
   const cb = job?.caller_phone || "not provided";
 
-  return `New roadside service call. Issue: ${issue}. Location: ${loc}. Vehicle: ${vehicle}. Notes: ${notes}. Driver callback: ${cb}. Press 1 to accept. Press 2 to decline.`;
+  return `New roadside service call. Issue: ${issue}. Location: ${loc}. Vehicle: ${vehicle}. Notes: ${notes}. Driver callback: ${cb}. Press 1 to accept. Press 2 to decline. Press 3 to repeat.`;
 }
 
-// Driver/AI intake endpoint
+// ===============================
+// Manual intake endpoint (optional)
+// ===============================
 app.post("/api/jobs/intake", async (req, res) => {
   console.log("INTAKE BODY:", req.body);
 
@@ -65,7 +67,9 @@ app.post("/api/jobs/intake", async (req, res) => {
   }
 });
 
-// Tech call IVR
+// ===============================
+// Tech call IVR (Twilio hits this)
+// ===============================
 app.post("/voice/offer", (req, res) => {
   const jobId = req.query.jobId;
   const job = JOBS.get(jobId) || null;
@@ -73,7 +77,7 @@ app.post("/voice/offer", (req, res) => {
   res.type("text/xml");
   res.send(`
 <Response>
-  <Gather numDigits="1" action="/voice/offer/choice?jobId=${jobId}" timeout="20">
+  <Gather numDigits="1" action="${process.env.BASE_URL}/voice/offer/choice?jobId=${encodeURIComponent(jobId)}" timeout="20">
     <Say>${buildTechScript(job)}</Say>
   </Gather>
   <Say>No response received.</Say>
@@ -81,29 +85,55 @@ app.post("/voice/offer", (req, res) => {
 `);
 });
 
-// Handle keypress
+// ===============================
+// Handle tech keypress
+// ===============================
 app.post("/voice/offer/choice", (req, res) => {
+  const jobId = req.query.jobId;
   const digit = req.body.Digits;
 
   res.type("text/xml");
 
   if (digit === "1") {
-    return res.send(`<Response><Say>Job accepted.</Say></Response>`);
+    // TODO: mark assigned in DB
+    return res.send(`<Response><Say>Job accepted. Thank you.</Say></Response>`);
+  }
+
+  if (digit === "3") {
+    // Repeat the message
+    return res.send(
+      `<Response><Redirect>${process.env.BASE_URL}/voice/offer?jobId=${encodeURIComponent(
+        jobId
+      )}</Redirect></Response>`
+    );
   }
 
   return res.send(`<Response><Say>Job declined.</Say></Response>`);
 });
 
+// ===============================
+// Vapi Webhook (GET + POST)
+// ===============================
+
+// ✅ Vapi (or its UI) may ping with GET
+app.get("/vapi/webhook", (req, res) => {
+  return res.status(200).send("ok");
+});
+
+// ✅ Vapi tool-calls arrive here
 app.post("/vapi/webhook", async (req, res) => {
-  // Optional security: verify secret from Vapi
-  const incoming = req.header("X-Vapi-Secret");
-  if (process.env.VAPI_SECRET && incoming !== process.env.VAPI_SECRET) {
+  // Vapi sends: x-vapi-secret: YOUR_TOKEN (no Bearer)
+  const incoming = (req.header("x-vapi-secret") || "").trim();
+  const expected = (process.env.VAPI_SECRET || "").trim();
+
+  if (expected && incoming !== expected) {
+    console.log("❌ Vapi webhook unauthorized");
     return res.status(401).json({ error: "unauthorized" });
   }
 
   const msg = req.body?.message;
 
-  // Only tool-calls require a JSON response
+  // Non-tool-call events: just acknowledge
   if (!msg || msg.type !== "tool-calls") return res.sendStatus(200);
 
   const toolCalls = msg.toolCallList || [];
@@ -155,29 +185,6 @@ app.post("/vapi/webhook", async (req, res) => {
   }
 
   return res.json({ results });
-});
-
-// ===============================
-// Vapi Webhook (GET + POST)
-// ===============================
-
-// ✅ Vapi (or its UI) may ping this with GET.
-// Your logs showed GET /vapi/webhook returning 404 before.
-app.get("/vapi/webhook", (req, res) => {
-  return res.status(200).send("ok");
-});
-
-app.post("/vapi/webhook", (req, res) => {
-  // Vapi sends: x-vapi-secret: YOUR_TOKEN  (no Bearer prefix)
-  const token = (req.header("x-vapi-secret") || "").trim();
-
-  if (!token || token !== (process.env.VAPI_SECRET || "").trim()) {
-    console.log("❌ Vapi webhook unauthorized:", { tokenReceived: !!token });
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  console.log("✅ Vapi webhook received:", req.body);
-  return res.status(200).send("ok");
 });
 
 app.listen(process.env.PORT || 3000, () => console.log("Server running"));
