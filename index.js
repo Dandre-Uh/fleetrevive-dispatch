@@ -157,4 +157,27 @@ app.post("/vapi/webhook", async (req, res) => {
   return res.json({ results });
 });
 
+// ===============================
+// Vapi Webhook (GET + POST)
+// ===============================
+
+// ✅ Vapi (or its UI) may ping this with GET.
+// Your logs showed GET /vapi/webhook returning 404 before.
+app.get("/vapi/webhook", (req, res) => {
+  return res.status(200).send("ok");
+});
+
+app.post("/vapi/webhook", (req, res) => {
+  // Vapi sends: x-vapi-secret: YOUR_TOKEN  (no Bearer prefix)
+  const token = (req.header("x-vapi-secret") || "").trim();
+
+  if (!token || token !== (process.env.VAPI_SECRET || "").trim()) {
+    console.log("❌ Vapi webhook unauthorized:", { tokenReceived: !!token });
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  console.log("✅ Vapi webhook received:", req.body);
+  return res.status(200).send("ok");
+});
+
 app.listen(process.env.PORT || 3000, () => console.log("Server running"));
